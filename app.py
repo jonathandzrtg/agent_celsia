@@ -4,25 +4,40 @@ Interfaz sencilla para consultar la base de datos vectorial ChromaDB
 """
 
 import streamlit as st
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
+#from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
+from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver 
+
+# Tool
+def get_tel_celsia():
+    """Funcion para obtener el telefono de celsia"""
+    return "3102226655"
+
+#validar que ya existen hilos y no los borra
+if "checkpointer" not in st.session_state:
+    st.session_state.checkpointer = InMemorySaver()
+
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = "1"
 
 # CONFIGURACIÓN DE LA PÁGINA
 
 st.set_page_config(
-    page_title="RAG Chat",
-    page_icon="💬",
+    page_title="Celsia Agent",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-#st.title("💬 RAG Chat - Celsia")
-st.markdown("<h1 style='text-align: center;'>💬 RAG Chat - Gemma 3 4B</h1>", unsafe_allow_html=True)
-st.write("Haz preguntas sobre los documentos cargados")
+# Titulo
+st.markdown("<h1 style='text-align: center;'>🤖 Agente Celsia llama 3.2 3B</h1>", unsafe_allow_html=True)
+st.write("En que puedo ayudarte hoy?")
 
 
 # INICIALIZAR SESIÓN
@@ -59,12 +74,19 @@ def cargar_rag():
         )
         
         # LLM
-        llm = OllamaLLM(
-            model="gemma3:4b",
-            base_url="http://localhost:11434",
-            temperature=0.7
+        #llm = OllamaLLM(
+        #    model="llama3.2:3b",
+        #    base_url="http://localhost:11434",
+        #    temperature=0.7
+        #)
+
+        llm = create_agent(
+            model="ollama:llama3.2:3b",
+            tools=[get_tel_celsia], #le pasamos al agente las tools que el puede usar, el las analiza segun el caso
+            system_prompt="You are a helpful assistant",
+            checkpointer=st.session_state.checkpointer,
         )
-        
+                
         # Retriever
         retriever = vectorstore.as_retriever(
             search_type="similarity",
@@ -127,7 +149,7 @@ with st.sidebar:
     st.divider()
     st.subheader("ℹ️ Información")
     st.write("""
-    - **Modelo LLM**: Gemma 3 4B
+    - **Modelo LLM**: Llama 3.2 3B
     - **Embeddings**: nomic-embed-text
     - **Base de datos**: ChromaDB
     - **Framework**: LangChain
