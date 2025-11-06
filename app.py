@@ -18,24 +18,22 @@ from langchain.tools import tool # El decorador para crear herramientas
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver 
 
+# Importar tools desde archivo externo
+from tools_celsia import (
+    get_telefono_celsia,
+    get_social_media_celsia,
+    get_pqr_celsia,
+    get_direccion_celsia,
+    get_pago_de_factura_celsia,
+    generar_factura_simulada,
+    verificar_estado_servicio,
+    calcular_instalacion_solar,
+    reportar_dano_servicio,
+    consultar_estado_reporte
+)
+
 # Ignorar advertencias (opcional, para limpiar la consola)
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
-# --- HERRAMIENTA 1: Función de Python Simple ---
-# Usamos el decorador @tool para que el agente pueda "ver" esta función
-@tool
-def get_telefono_celsia():
-    """Funcion para obtener el telefono de celsia. 
-    Usar SÓLO si el usuario pide explícitamente el número de teléfono."""
-    return "3102226655"
-
-@tool
-def get_direccion_celsia():
-    """Funcion para obtener la direccion de celsia. 
-    Usar SÓLO si el usuario pide explícitamente la dirección."""
-    return "Calle 1 Casa 1 avenida siempre viva"
-
 
 # --- Configuración de Estado de Streamlit (Session State) ---
 
@@ -51,6 +49,18 @@ if "thread_id" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Parámetros del LLM (configurables desde sidebar)
+if "temperature" not in st.session_state:
+    st.session_state.temperature = 0.5
+if "top_k" not in st.session_state:
+    st.session_state.top_k = 40
+if "top_p" not in st.session_state:
+    st.session_state.top_p = 0.9
+
+# Parámetros del Retriever
+if "retriever_k" not in st.session_state:
+    st.session_state.retriever_k = 5
+
 
 # --- CONFIGURACIÓN DE LA PÁGINA de Streamlit ---
 st.set_page_config(
@@ -61,17 +71,16 @@ st.set_page_config(
 )
 
 # Titulo
-st.markdown("<h1 style='text_align: center;'>🤖 Agente Celsia llama 3.2 3B</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text_align: center;'>🤖 Agente Celsia Qwen3:4B</h1>", unsafe_allow_html=True)
 st.write("En que puedo ayudarte hoy?")
 
 
 # --- FUNCIÓN PRINCIPAL DE CARGA (Cacheada) ---
-# @st.cache_resource asegura que esto solo se ejecute una vez
-@st.cache_resource
-def cargar_agente_y_rag():
+# Ya no usamos cache porque queremos que los parámetros sean dinámicos
+def cargar_agente_y_rag(temperature=0.5, top_k=40, top_p=0.9, retriever_k=5):
     """
     Esta función carga todos los componentes (VectorDB, LLM, RAG chain)
-    y construye el Agente final.
+    y construye el Agente final con parámetros configurables.
     """
     
     with st.spinner("⏳ Iniciando sistemas... (esto puede tardar un momento)"):
@@ -81,7 +90,9 @@ def cargar_agente_y_rag():
         llm = ChatOllama(
             model="qwen3:4b",
             base_url="http://localhost:11434",
-            temperature=0.3 # Temperatura baja para que el agente sea más predecible
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p
         )
 
         # --- 2. Configuración de Embeddings y Vectorstore (Retriever) ---
@@ -97,9 +108,14 @@ def cargar_agente_y_rag():
         )
         
         # El 'retriever' es la parte que busca en la base de datos
+        # Usamos MMR (Maximum Marginal Relevance) para obtener mayor diversidad
         retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3} # Traer los 3 fragmentos más relevantes
+            search_type="mmr",
+            search_kwargs={
+                "k": retriever_k,  # Documentos finales a retornar
+                "fetch_k": retriever_k * 4,  # Documentos iniciales a buscar (más pool para diversidad)
+                "lambda_mult": 0.5  # Balance entre relevancia (1.0) y diversidad (0.0)
+            }
         )
         
         # --- 3. Definición de la Cadena RAG ---
@@ -146,18 +162,50 @@ Respuesta:""",
         # --- 5. Creación del Agente ---
         
         # Lista de herramientas que el agente puede elegir
-        tools = [get_direccion_celsia, get_telefono_celsia, BuscadorDocumentosCelsia]
+        tools = [
+            # Tools informativas
+            get_telefono_celsia,
+            get_direccion_celsia,
+            get_social_media_celsia,
+            get_pqr_celsia,
+            get_pago_de_factura_celsia,
+            # Tools funcionales
+            generar_factura_simulada,
+            verificar_estado_servicio,
+            calcular_instalacion_solar,
+            reportar_dano_servicio,
+            consultar_estado_reporte,
+            # Tool RAG
+            BuscadorDocumentosCelsia
+        ]
         
         # Prompt del sistema: Las instrucciones maestras para el Agente
         system_prompt_agent = """Eres un asistente virtual de Celsia.
 Tu trabajo es ayudar a los usuarios con sus preguntas. Responde siempre en español.
-Tienes dos herramientas a tu disposición:
 
-1.  `get_telefono_celsia`: Úsala SÓLO si el usuario pide el número de teléfono.
-2.  `get_direccion_celsia`: Úsala SÓLO si el usuario pide la dirección.
-3.  `BuscadorDocumentosCelsia`: Úsala para responder CUALQUIER OTRA pregunta sobre Celsia, ya que busca en la base de datos oficial.
+**IMPORTANTE - Orden de prioridad para usar herramientas:**
 
-Primero, analiza la pregunta del usuario. Luego, elige la herramienta correcta para responder."""
+1. **PRIMERO**: Analiza si la pregunta solicita información específica que puedes obtener con las herramientas directas:
+   - `get_telefono_celsia`: Teléfono de Celsia
+   - `get_direccion_celsia`: Direcciones de oficinas
+   - `get_social_media_celsia`: Redes sociales
+   - `get_pqr_celsia`: Sistema de PQR
+   - `get_pago_de_factura_celsia`: Cómo pagar facturas
+   - `generar_factura_simulada`: Si piden ver una factura con número de cuenta y mes
+   - `verificar_estado_servicio`: Si preguntan por interrupciones en una ciudad
+   - `calcular_instalacion_solar`: Si quieren cotizar paneles solares
+   - `reportar_dano_servicio`: Si quieren reportar un daño o falla
+   - `consultar_estado_reporte`: Si tienen un ticket y quieren consultarlo
+
+2. **SEGUNDO**: Si la pregunta NO se puede responder con las tools anteriores, usa:
+   - `BuscadorDocumentosCelsia`: Para preguntas generales sobre Celsia, servicios, tarifas, procesos, etc.
+
+**Estrategia de respuesta:**
+- Si usaste `get_telefono_celsia` o `get_direccion_celsia`, responde ÚNICAMENTE con esa información, no uses el buscador.
+- Si usaste `BuscadorDocumentosCelsia`, basa tu respuesta ÚNICAMENTE en lo que la herramienta te devolvió.
+- Si el BuscadorDocumentosCelsia no tiene información suficiente, indícale al usuario que contacte los canales oficiales.
+
+Sé conciso y profesional."""
         
         # Creamos el Agente
         agent_graph = create_agent(
@@ -170,38 +218,98 @@ Primero, analiza la pregunta del usuario. Luego, elige la herramienta correcta p
         # Devolvemos el agente (ya no la 'rag_chain') y el retriever (para depurar)
         return agent_graph, retriever, vectorstore
 
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("⚙️ Configuración")
+    
+    st.subheader("🎛️ Parámetros del LLM")
+    
+    # Slider de temperatura
+    temperature = st.slider(
+        "Temperatura",
+        min_value=0.0,
+        max_value=1.0,
+        value=st.session_state.temperature,
+        step=0.05,
+        help="Controla la creatividad del modelo. Valores bajos (0.1-0.3) = más determinista. Valores altos (0.7-1.0) = más creativo."
+    )
+    st.session_state.temperature = temperature
+    
+    # Slider de top_k
+    top_k = st.slider(
+        "Top K",
+        min_value=1,
+        max_value=100,
+        value=st.session_state.top_k,
+        step=1,
+        help="Limita las opciones a las K palabras más probables en cada paso."
+    )
+    st.session_state.top_k = top_k
+    
+    # Slider de top_p
+    top_p = st.slider(
+        "Top P (Nucleus Sampling)",
+        min_value=0.0,
+        max_value=1.0,
+        value=st.session_state.top_p,
+        step=0.05,
+        help="Considera solo las palabras cuya probabilidad acumulada sea <= P."
+    )
+    st.session_state.top_p = top_p
+    
+    st.divider()
+    st.subheader("🔍 Parámetros del Retriever")
+    
+    # Slider para k del retriever
+    retriever_k = st.slider(
+        "Cantidad de documentos (k)",
+        min_value=1,
+        max_value=10,
+        value=st.session_state.retriever_k,
+        step=1,
+        help="Número de chunks de documentos a recuperar de la base de datos."
+    )
+    st.session_state.retriever_k = retriever_k
+
 # --- Carga Inicial ---
-# Llamamos a la función. Streamlit la cacheará.
+# Llamamos a la función con los parámetros configurables
 try:
-    agent_graph, retriever, vectorstore = cargar_agente_y_rag()
+    agent_graph, retriever, vectorstore = cargar_agente_y_rag(
+        temperature=st.session_state.temperature,
+        top_k=st.session_state.top_k,
+        top_p=st.session_state.top_p,
+        retriever_k=st.session_state.retriever_k
+    )
     st.success("✅ Agente y base de datos cargados correctamente")
 except Exception as e:
     st.error(f"Error al cargar el agente: {e}")
     st.stop() # Detiene la ejecución si hay un error crítico
 
 
-# --- SIDEBAR ---
+# --- SIDEBAR (continuación) ---
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.divider()
+    st.subheader("📊 Información del Sistema")
     try:
-        st.info(f"📊 Documentos en la BD: {vectorstore._collection.count()}")
+        st.info(f"📚 Documentos en la BD: {vectorstore._collection.count()}")
     except Exception as e:
         st.warning("No se pudo contar los documentos de ChromaDB.")
+    
+    st.write(f"""    
+    - **Modelo LLM**: qwen3:4b
+    - **Embeddings**: nomic-embed-text
+    - **Base de datos**: ChromaDB
+    - **Framework**: LangGraph (Agente)
+    - **Búsqueda**: MMR (Max Marginal Relevance)
+    """)
+    
+    st.divider()
     
     if st.button("🗑️ Limpiar historial"):
         st.session_state.messages = []
         # Limpiamos también la memoria del agente
         st.session_state.checkpointer = InMemorySaver()
         st.rerun() # Recarga la página
-    
-    st.divider()
-    st.subheader("ℹ️ Información")
-    st.write("""
-    - **Modelo LLM**: Llama 3.2 3B
-    - **Embeddings**: nomic-embed-text
-    - **Base de datos**: ChromaDB
-    - **Framework**: LangGraph (Agente)
-    """)
 
 # --- Lógica del Chat ---
 
@@ -248,20 +356,61 @@ if pregunta:
             # 5. Mostrar la respuesta en la UI
             st.markdown(respuesta_final_str)
             
+            # 5.1 Mostrar parámetros activos del LLM en un pequeño badge
+            st.caption(f"🎛️ Parámetros: Temp={st.session_state.temperature} | Top-K={st.session_state.top_k} | Top-P={st.session_state.top_p} | Docs={st.session_state.retriever_k}")
+            
             # 6. Guardar la respuesta en el historial de Streamlit
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": respuesta_final_str
             })
             
-            # 7. (Opcional) Mostrar documentos para depuración
-            with st.expander("📚 Documentos recuperados (Solo para referencia)"):
-                # Mostramos lo que el retriever habría encontrado
-                docs = retriever.invoke(pregunta)
-                if docs:
-                    for i, doc in enumerate(docs, 1):
-                        source = doc.metadata.get('source', 'Fuente desconocida')
-                        st.write(f"**[{i}] {source}**")
-                        st.info(doc.page_content)
+            # 7. Mostrar información de debugging mejorada
+            with st.expander("🔍 Debugging: Información del Agente"):
+                # Mostrar qué herramientas usó el agente
+                st.subheader("🛠️ Herramientas utilizadas")
+                tool_calls = []
+                for msg in respuesta_dict.get("messages", []):
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        for tool_call in msg.tool_calls:
+                            tool_calls.append({
+                                "tool": tool_call.get("name", "desconocido"),
+                                "args": tool_call.get("args", {})
+                            })
+                
+                if tool_calls:
+                    for i, tc in enumerate(tool_calls, 1):
+                        st.write(f"**{i}. {tc['tool']}**")
+                        if tc['args']:
+                            st.json(tc['args'])
                 else:
-                    st.write("No se recuperaron documentos para esta consulta.")
+                    st.write("No se usaron herramientas explícitas.")
+                
+                st.divider()
+                
+                # Mostrar documentos recuperados con scores de similaridad
+                st.subheader("📚 Documentos recuperados del RAG")
+                try:
+                    # Usamos similarity_search_with_score para obtener los scores
+                    docs_with_scores = vectorstore.similarity_search_with_score(pregunta, k=st.session_state.retriever_k)
+                    
+                    if docs_with_scores:
+                        st.write(f"Se recuperaron {len(docs_with_scores)} documentos:")
+                        for i, (doc, score) in enumerate(docs_with_scores, 1):
+                            source = doc.metadata.get('source', 'Fuente desconocida')
+                            # Score más bajo = más similar (distancia)
+                            st.write(f"**[{i}] {source}** - Score: {score:.4f}")
+                            st.info(doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content)
+                    else:
+                        st.write("No se recuperaron documentos para esta consulta.")
+                except Exception as e:
+                    st.error(f"Error al recuperar documentos con scores: {e}")
+                    # Fallback a método sin scores
+                    docs = retriever.invoke(pregunta)
+                    if docs:
+                        for i, doc in enumerate(docs, 1):
+                            source = doc.metadata.get('source', 'Fuente desconocida')
+                            st.write(f"**[{i}] {source}**")
+                            st.info(doc.page_content)
+                    else:
+                        st.write("No se recuperaron documentos.")
