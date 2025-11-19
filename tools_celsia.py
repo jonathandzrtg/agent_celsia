@@ -6,6 +6,8 @@ Versión académica - Simulación de funcionalidades básicas
 from langchain.tools import tool
 from datetime import datetime, timedelta
 import random
+from pydantic import BaseModel, Field
+from enum import Enum
 
 # Base de datos simulada en memoria
 reportes_db = {}
@@ -51,7 +53,11 @@ def get_pago_de_factura_celsia():
 
 # ==================== TOOLS FUNCIONALES (nuevas) ====================
 
-@tool
+class GenerarFacturaSimuladaInput(BaseModel):
+    numero_cuenta: str = Field(..., description="Número de cuenta de 8 dígitos (ej: '12345678')")
+    mes: str = Field(..., description="Mes a consultar (ej: 'octubre', 'noviembre')")
+
+@tool(args_schema=GenerarFacturaSimuladaInput)
 def generar_factura_simulada(numero_cuenta: str, mes: str) -> str:
     """Genera una factura simulada con consumo y valor a pagar.
     
@@ -91,7 +97,10 @@ Paga en: https://clientes.celsia.com
 """
 
 
-@tool
+class VerificarEstadoServicioInput(BaseModel):
+    ciudad: str = Field(..., description="Ciudad a consultar (Palmira, Tuluá, Ibagué, Buenaventura)")
+
+@tool(args_schema=VerificarEstadoServicioInput)
 def verificar_estado_servicio(ciudad: str) -> str:
     """Verifica si hay interrupciones del servicio en una ciudad.
     
@@ -133,7 +142,11 @@ Si tienes problemas, repórtalos al: 01 8000 112 115
 """
 
 
-@tool
+class CalcularInstalacionSolarInput(BaseModel):
+    consumo_mensual_kwh: int = Field(..., description="Consumo mensual en kWh (ej: 200, 350)")
+    ciudad: str = Field(..., description="Ciudad donde instalar")
+
+@tool(args_schema=CalcularInstalacionSolarInput)
 def calcular_instalacion_solar(consumo_mensual_kwh: int, ciudad: str) -> str:
     """Calcula el costo de instalación de paneles solares.
     
@@ -172,8 +185,21 @@ Web: https://www.celsia.com/es/soluciones-en-eficiencia-energetica-para-empresas
 """
 
 
-@tool
-def reportar_dano_servicio(tipo_dano: str, direccion: str, telefono: str) -> str:
+from enum import Enum # Add this import at the top
+
+class TipoDano(str, Enum):
+    APAGON = "apagon"
+    POSTE_DANADO = "poste_dañado"
+    CABLE_CAIDO = "cable_caido"
+    FLUCTUACION = "fluctuacion"
+
+class ReportarDanoServicioInput(BaseModel):
+    tipo_dano: TipoDano = Field(..., description="Tipo (apagon, poste_dañado, cable_caido, fluctuacion)")
+    direccion: str = Field(..., description="Dirección donde ocurre")
+    telefono: str = Field(..., description="Teléfono de contacto")
+
+@tool(args_schema=ReportarDanoServicioInput)
+def reportar_dano_servicio(tipo_dano: TipoDano, direccion: str, telefono: str) -> str:
     """Reporta un daño en el servicio eléctrico y genera un ticket.
     
     Args:
@@ -224,7 +250,10 @@ Línea de ayuda: 01 8000 112 115
 """
 
 
-@tool
+class ConsultarEstadoReporteInput(BaseModel):
+    ticket_id: str = Field(..., description="Número de ticket (ej: 'TKT-1001')")
+
+@tool(args_schema=ConsultarEstadoReporteInput)
 def consultar_estado_reporte(ticket_id: str) -> str:
     """Consulta el estado de un reporte creado previamente.
     
