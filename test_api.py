@@ -1,50 +1,53 @@
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
-# Import the main module to access its app instance and global variables
-import main 
+# Import the main module under an alias
+import main as main_module 
+
+# Import agent components from src.agent.core
+from src.agent.core import load_agent_and_rag_components, CHECKPOINTER
+# Import InMemorySaver explicitly as it's used in the test fixture
+from langgraph.checkpoint.memory import InMemorySaver
+
 
 # Create a TestClient instance for your FastAPI application
-# This automatically handles startup/shutdown events for the app
-client = TestClient(main.app)
+client = TestClient(main_module.app) # Use main_module.app here
 
 # --- Pytest Fixtures ---
 @pytest.fixture(scope="module", autouse=True)
 def setup_agent_for_tests():
     """
     Fixture to ensure the agent is loaded before running tests.
-    This mimics the startup event of the FastAPI app.
+    This directly calls load_agent_and_rag_components and handles exceptions.
     """
-    # Ensure the AGENT_GRAPH is cleared before loading for tests
-    main.AGENT_GRAPH = None 
-    
     print("\n--- Running setup_agent_for_tests fixture ---")
     
-    # Reset checkpointer for isolated tests
-    main.CHECKPOINTER = main.InMemorySaver()
+    # Reset checkpointer for isolated tests (using the imported InMemorySaver)
+    global CHECKPOINTER
+    CHECKPOINTER = InMemorySaver()
     
-    # Calling the actual startup logic directly to ensure global AGENT_GRAPH is set for tests
     try:
-        # FastAPI's TestClient usually handles startup events, but due to issues,
-        # we explicitly ensure the AGENT_GRAPH is loaded.
-        # This is a workaround if TestClient's startup doesn't fully trigger
-        # blocking calls or complex setups.
-        if main.AGENT_GRAPH is None: # Only load if not already loaded by TestClient startup
-            # This line simulates the startup event logic
-            loaded_graph = main.load_agent_and_rag_components(
-                temperature=0.5, top_k=40, top_p=0.9, retriever_k=5
-            )
-            main.AGENT_GRAPH = loaded_graph # Assignment to the global AGENT_GRAPH
-        
-        # Ensure the client is fully started.
-        client.get("/health") 
-        
-        print("AGENT_GRAPH is loaded for tests:", main.AGENT_GRAPH is not None)
-        yield 
-    finally:
-        print("--- Running teardown for setup_agent_for_tests fixture ---")
-        # Optional: Clean up resources if necessary after all tests in module
-        main.AGENT_GRAPH = None # Clear agent graph after tests to free memory
+        # Directly call the agent loading function
+        loaded_graph = load_agent_and_rag_components(
+            temperature=0.5, top_k=40, top_p=0.9, retriever_k=5
+        )
+        main_module.AGENT_GRAPH = loaded_graph # Assign to main_module.AGENT_GRAPH
+        print(f"DEBUG: Agent loaded successfully in fixture.")
+    except Exception as e:
+        print(f"ERROR: Agent loading failed in fixture: {e}")
+        import traceback
+        traceback.print_exc() # Print full traceback
+        pytest.fail(f"Agent failed to load in fixture: {e}") # Force test failure
+    
+    # Ensure TestClient's startup event is also triggered (this will just run, AGENT_GRAPH is already set)
+    # The client.get("/health") call here is to ensure the TestClient fully initializes,
+    # but the actual AGENT_GRAPH is set directly above.
+    client.get("/health") 
+
+    yield 
+
+    print("--- Running teardown for setup_agent_for_tests fixture ---")
+    main_module.AGENT_GRAPH = None # Clear agent graph after tests to free memory
 
 
 # --- Tests ---
@@ -53,6 +56,8 @@ def test_health_check_after_startup():
     Test the /health endpoint after the startup event has loaded the agent.
     """
     response = client.get("/health")
+    if response.status_code != 200:
+        print(f"\nHealth check failed with status {response.status_code}. Detail: {response.json().get('detail', 'No detail provided.')}")
     assert response.status_code == 200
     response_data = response.json()
     assert response_data["status"] == "ok"
@@ -70,6 +75,8 @@ def test_chat_endpoint_simple_message():
         json={"user_message": user_message, "session_id": session_id}
     )
     
+    if response.status_code != 200:
+        print(f"\nSimple chat failed with status {response.status_code}. Detail: {response.json().get('detail', 'No detail provided.')}")
     assert response.status_code == 200
     response_data = response.json()
     assert "response" in response_data
@@ -90,6 +97,8 @@ def test_chat_endpoint_tool_invocation_telefono():
         json={"user_message": user_message, "session_id": session_id}
     )
 
+    if response.status_code != 200:
+        print(f"\nTool invocation (telefono) failed with status {response.status_code}. Detail: {response.json().get('detail', 'No detail provided.')}")
     assert response.status_code == 200
     response_data = response.json()
     assert "response" in response_data
@@ -109,6 +118,8 @@ def test_chat_endpoint_tool_invocation_estado_servicio():
         json={"user_message": user_message, "session_id": session_id}
     )
 
+    if response.status_code != 200:
+        print(f"\nTool invocation (estado_servicio) failed with status {response.status_code}. Detail: {response.json().get('detail', 'No detail provided.')}")
     assert response.status_code == 200
     response_data = response.json()
     assert "response" in response_data
