@@ -3,6 +3,7 @@ import warnings
 from dotenv import load_dotenv
 
 # LangChain / LangGraph Imports
+from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_ollama import ChatOllama
@@ -57,7 +58,7 @@ def load_agent_and_rag_components(
     
     # --- 1. LLM Configuration ---
     llm = ChatOllama(
-        model=os.getenv("OLLAMA_LLM_MODEL", "qwen3:4b"),
+        model=os.getenv("OLLAMA_LLM_MODEL", "qwen3:14b"),
         base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         temperature=temperature,
         top_k=top_k,
@@ -118,3 +119,65 @@ Pregunta: {question}
 Respuesta:""",
         input_variables=["context", "question"]
     )
+
+    # --- 4. Conectar el Prompt con el LLM (RAG Chain) ---
+    # Definimos funciones auxiliares para formatear documentos
+    def formato_docs(docs):
+        return "\n\n".join([doc.page_content for doc in docs])
+
+    # Creamos la cadena lógica: Retriever -> Prompt -> LLM -> Texto
+    rag_chain = (
+        {"context": retriever | formato_docs, "question": RunnablePassthrough()}
+        | prompt_rag
+        | llm
+        | StrOutputParser()
+    )
+
+    # --- 5. Convertir la Cadena RAG en una Herramienta (@tool) ---
+    @tool
+    def BuscadorDocumentosCelsia(pregunta: str) -> str:
+        """
+        Herramienta RAG oficial. Úsala para responder preguntas generales sobre Celsia,
+        tarifas, reglamentos, o información institucional.
+        """
+        try:
+            return rag_chain.invoke(pregunta)
+        except Exception as e:
+            return f"Error consultando documentos: {str(e)}"
+
+    # --- 6. Lista Completa de Herramientas ---
+    # Aquí juntamos las herramientas importadas + la nueva herramienta RAG
+    tools = [
+        get_telefono_celsia,
+        get_direccion_celsia,
+        get_social_media_celsia,
+        get_pqr_celsia,
+        get_pago_de_factura_celsia,
+        generar_factura_simulada,
+        verificar_estado_servicio,
+        calcular_instalacion_solar,
+        reportar_dano_servicio,
+        consultar_estado_reporte,
+        BuscadorDocumentosCelsia # <--- Agregamos la tool que acabamos de crear
+    ]
+
+    # --- 7. Mensaje del Sistema ---
+    system_message = """Eres el Asistente Virtual de Celsia.
+    Tu objetivo es ayudar al usuario de forma eficiente.
+    
+    Reglas:
+    1. Si el usuario pide un dato específico (ej. teléfono), usa la herramienta específica.
+    2. Si es una pregunta general, usa 'BuscadorDocumentosCelsia'.
+    3. Responde siempre en español y con amabilidad.
+    """
+
+    # --- 8. Creación del Agente y Retorno (LO QUE TÚ PEDISTE) ---
+    agent_graph = create_react_agent(
+        model=llm,
+        tools=tools,
+        prompt=system_message,
+        checkpointer=CHECKPOINTER
+    )
+    
+    print("✅ Agente y componentes cargados exitosamente.")
+    return agent_graph
