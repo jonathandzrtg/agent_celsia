@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
 
@@ -46,6 +47,22 @@ app = FastAPI(
     title="Celsia Chatbot API",
     description="API for the Celsia AI Chatbot, integrated with LangGraph and Function Calling.",
     version="1.0.0"
+)
+
+# --- CORS Middleware Configuration ---
+# Allow frontend to communicate with the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:3000",
+        "file://",  # Allow local file access
+        "null"  # Allow file:// protocol
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Global instance for agent

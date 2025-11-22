@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Chatbot inteligente de Celsia - Asistente virtual para consultas sobre energía, facturación y servicios">
+    <title>Chatbot Celsia - Asistente Virtual</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <header class="chat-header">
+            <div class="header-content">
+                <img src="assets/logo.png" alt="Logo Celsia" class="logo" id="celsia-logo">
+                <div class="header-text">
+                    <h1>Asistente Virtual Celsia</h1>
+                    <p class="status-indicator">
+                        <span class="status-dot"></span>
+                        En línea
+                    </p>
+                </div>
+            </div>
+            <button class="clear-chat-btn" id="clearChatBtn" title="Limpiar conversación">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Messages Container -->
+        <div class="messages-container" id="messagesContainer">
+            <div class="welcome-message">
+                <div class="bot-avatar">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                </div>
+                <div class="welcome-text">
+                    <h2>¡Bienvenido a Celsia!</h2>
+                    <p>Soy tu asistente virtual. Estoy aquí para ayudarte con información sobre nuestros servicios, facturación, puntos de pago y más.</p>
+                    <p class="welcome-suggestions">Puedes preguntarme sobre:</p>
+                    <ul class="suggestions-list">
+                        <li>📞 Información de contacto</li>
+                        <li>💡 Servicios de energía</li>
+                        <li>💳 Facturación y pagos</li>
+                        <li>🏢 Ubicaciones y sedes</li>
+                        <li>♻️ Programas de sostenibilidad</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="bot-avatar-small">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>
+            </div>
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <form class="input-form" id="chatForm">
+                <textarea 
+                    id="userInput" 
+                    class="chat-input" 
+                    placeholder="Escribe tu mensaje aquí..."
+                    rows="1"
+                    maxlength="1000"
+                ></textarea>
+                <button type="submit" class="send-btn" id="sendBtn" title="Enviar mensaje">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </form>
+            <div class="input-info">
+                <span class="char-counter" id="charCounter">0/1000</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
