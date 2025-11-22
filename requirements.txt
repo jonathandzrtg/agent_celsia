@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic>=2.0.0 # Pydantic v2 is preferred for FastAPI and LangChain
+langchain
+langchain-chroma
+langchain-ollama
+langgraph
+chromadb
+ollama
+python-dotenv # For managing environment variables
+langchain-google-genai
+google-generativeai
+jq
+langsmith

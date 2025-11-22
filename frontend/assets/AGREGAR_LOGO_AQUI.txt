@@ -1,0 +1,19 @@
+📋 INSTRUCCIONES: Logo de Celsia
+==================================
+
+Coloca el logo de Celsia en esta carpeta con el nombre:
+  celsia-logo.png
+
+Recomendaciones:
+- Formato: PNG con fondo transparente
+- Tamaño recomendado: 200x200 píxeles o similar
+- El logo se mostrará en el header del chatbot
+
+Si no tienes el logo, puedes:
+1. Descargarlo del sitio oficial de Celsia (https://www.celsia.com/)
+2. Usar un logo placeholder temporalmente
+3. El frontend ocultará automáticamente el logo si no existe
+
+Nota: Si decides usar un nombre diferente para el archivo, 
+actualiza la línea 15 del archivo index.html:
+  <img src="assets/TU_NOMBRE_AQUI.png" alt="Logo Celsia" class="logo">
